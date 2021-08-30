@@ -96,7 +96,8 @@ class _EncoderBase(torch.nn.Module):
 
         # First count how many sequences are empty.
         batch_size = mask.size(0)
-        num_valid = torch.sum(mask[:, 0]).int().item()
+        num_valid = batch_size #torch.sum(mask[:, 0]).int().item()
+        valid_indices = torch.arange(0, torch.sum(mask[:, 0]))
 
         sequence_lengths = get_lengths_from_binary_sequence_mask(mask)
         (
@@ -108,8 +109,10 @@ class _EncoderBase(torch.nn.Module):
 
         # Now create a PackedSequence with only the non-empty, sorted sequences.
         packed_sequence_input = pack_padded_sequence(
-            sorted_inputs[:num_valid, :, :],
-            sorted_sequence_lengths[:num_valid].data.tolist(),
+            #sorted_inputs[:num_valid, :, :],
+            #sorted_sequence_lengths[:num_valid].data.tolist(),
+            sorted_inputs.index_select(0, valid_indices),
+            sorted_sequence_lengths.index_select(0, valid_indices),
             batch_first=True,
         )
         # Prepare the initial states.
@@ -118,13 +121,15 @@ class _EncoderBase(torch.nn.Module):
                 initial_states: Any = hidden_state
             elif isinstance(hidden_state, tuple):
                 initial_states = [
-                    state.index_select(1, sorting_indices)[:, :num_valid, :].contiguous()
+                    #state.index_select(1, sorting_indices)[:, :num_valid, :].contiguous()
+                    state.index_select(1, sorting_indices).index_select(1, valid_indices).contiguous()
                     for state in hidden_state
                 ]
             else:
-                initial_states = hidden_state.index_select(1, sorting_indices)[
-                    :, :num_valid, :
-                ].contiguous()
+                #initial_states = hidden_state.index_select(1, sorting_indices)[
+                #    :, :num_valid, :
+                #].contiguous()
+                initial_states = hidden_state.index_select(1, sorting_indices).index_select(1, valid_indices).contiguous()
 
         else:
             initial_states = self._get_initial_states(batch_size, num_valid, sorting_indices)
